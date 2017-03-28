@@ -21,32 +21,125 @@ var util = require('util'),
     copyFiles = require('./lib/metaUtils').copyFiles,
     packageVersion = require('./package.json').version;
 
+function showHelp(missingArgs){
+    if(missingArgs)
+        console.error('Error: Missing required arguments');
+    program.help(); 
+    process.exit(1);
+}
+
+var git = {
+    branch : function(){
+        return spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD']).stdout.toString('utf8');
+    },
+    long : function(){
+        return spawnSync('git', ['rev-parse', 'HEAD']).stdout.toString('utf8');
+    },
+    short : function(){
+        return spawnSync('git', ['rev-parse', '--short', 'HEAD']).stdout.toString('utf8');
+    },
+    tag : function(){
+        return spawnSync('git', ['describe', '--always', '--tag', '--abbrev=0']).stdout.toString('utf8');
+    }
+}
 
 program
-    .arguments('<compare> <branch> [target]')
     .version(packageVersion)
+    .command('create')
+    .description('Creates the package.xml file')
+    .option('-o, --output [targetDirectory]','Directory to save deployments. Defaults to "./deploy".  Overrides dryrun')
+    .option('-b, --targetBranch <targetBranch>','Branch to compare to')
+    .option('-s, --sourceBranch <sourceBranch>','Branch to compare with and copy files from (usually current branch)')
     .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
-    .action(function (compare, branch, target) {
+    .option('-c, --commit <sinceCommit>', 'Compare commits on current branch instead of branch compare')
+    .option('-t, --timeframe <tf>', 'Compare by timestamp - since date on current branch ex: "@{1.day.ago}"',/^@{\d\.(day|days|hour|hours|month|months).ago}$/i)
+    .option('--debug', 'Show debug variables')
+    .action(function(options){
+        if(options.debug){
+            console.log('options.targetBranch: ' + options.targetBranch);
+            console.log('options.sourceBranch: ' + options.sourceBranch);
+            console.log('options.timeframe: ' + options.timeframe);
+            console.log('options.commit: ' + options.commit);
+            console.log('options.output: ' + options.output);
+            console.log('options.dryrun: ' + options.dryrun);
+        }
 
-        if (!branch || !compare) {
-            console.error('branch and target branch are both required');
+        var gitDiff;
+        var deploymentFolder;
+        var timeframe;
+        var gitOpts = ['--no-pager', 'diff', '--name-status'];
+
+        if(options.timeframe === true){
+            console.error('Error: invalid timeframe specified.  Please use the format @{1.day.ago}');
+            process.exit(1);
+        }else{
+            timeframe = options.timeframe;
+        }
+
+        if(options.commit){
+            if(options.targetBranch || options.sourceBranch){
+                console.error('Error: commit flag cannot be used with sourceBranch or targetBranch');
+                process.exit(1);
+            }else{
+                gitOpts.push(options.commit);
+            }
+            deploymentFolder = options.commit;
+        }else if (options.targetBranch) {
+            var sourceBranch = options.sourceBranch;
+            if(!options.sourceBranch){
+                sourceBranch = 'HEAD';
+            }
+            gitOpts.push([options.target, sourceBranch]);
+            deploymentFolder = options.targetBranch;
+        } else if(options.sourceBranch) {
+            console.error('Error: target branch is required required when source is specified');
+            program.help();
+            process.exit(1);
+        }else if(!timeframe){
+            console.error('Error: missing required options');
             program.help();
             process.exit(1);
         }
 
-        var dryrun = false;
-        if (program.dryrun) {
-            dryrun = true;
+        if(timeframe){
+            gitOpts.push(timeframe);
         }
 
-        if (!dryrun && !target) {
-            console.error('target required when not dry-run');
-            program.help();
+        gitDiff = spawnSync('git', gitOpts);
+
+        //set deploymentFolder
+        var currentBranch = git.branch();
+        if(options.debug) console.log('current branch: ' + git.branch());
+
+        execute(options.output, gitDiff, deploymentFolder, options.dryrun);
+    });
+
+program
+    .command('deploy <env>')
+    .description('TODO: Deploy the given environment')
+    .action(function(env){
+      console.log('deploying "%s"', env);
+    });
+
+
+function execute(outputDir, gitDiff, deploymentFolder, dryrun){
+        
+
+        if(!gitDiff){
             process.exit(1);
         }
+
+        if (!dryrun && !outputDir) {
+            outputDir = './deploy';
+            console.log("using default target './deploy'");
+            //console.error('target required when not dry-run');
+            //program.help();
+            //process.exit(1);
+        }
+
+        var target = outputDir;
 
         var currentDir = process.cwd();
-        const gitDiff = spawnSync('git', ['--no-pager', 'diff', '--name-status', compare, branch]);
         var gitDiffStdOut = gitDiff.stdout.toString('utf8');
         var gitDiffStdErr = gitDiff.stderr.toString('utf8');
 
@@ -64,12 +157,15 @@ program
         var deletesHaveOccurred = false;
 
         fileList = gitDiffStdOut.split('\n');
-        fileList.forEach(function (fileName, index) {
 
+        console.log('\nFiles detected as changed:');
+
+        fileList.forEach(function (fileName, index) {
             // get the git operation
             var operation = fileName.slice(0,1);
             // remove the operation and spaces from fileName
             fileName = fileName.slice(1).trim();
+            if(fileName) console.log(' - ' + fileName);
 
             //ensure file is inside of src directory of project
             if (fileName && fileName.substring(0,3) === 'src') {
@@ -133,16 +229,22 @@ program
         //build destructiveChanges file content
         var destructiveXML = packageWriter(metaBagDestructive);
         if (dryrun) {
-            console.log('\npackage.xml\n');
+            console.log('\nResulting package.xml\n');
             console.log(packageXML);
-            console.log('\ndestructiveChanges.xml\n');
+            console.log('\nResulting destructiveChanges.xml\n');
             console.log(destructiveXML);
             process.exit(0);
         }
 
         console.log('Building in directory %s', target);
 
-        buildPackageDir(target, branch, metaBag, packageXML, false, (err, buildDir) => {
+        if(!deploymentFolder){
+            console.error('Error: output folder was undefined');
+            process.exit(1);
+        }
+        console.log('Saving deployment to folder: ', deploymentFolder);
+
+        buildPackageDir(target, deploymentFolder, metaBag, packageXML, false, (err, buildDir) => {
 
             if (err) {
                 return console.error(err);
@@ -154,7 +256,7 @@ program
         });
 
         if (deletesHaveOccurred) {
-            buildPackageDir(target, branch, metaBagDestructive, destructiveXML, true, (err, buildDir) => {
+            buildPackageDir(target, deploymentFolder, metaBagDestructive, destructiveXML, true, (err, buildDir) => {
 
                 if (err) {
                     return console.error(err);
@@ -163,6 +265,6 @@ program
                 console.log('Successfully created destructiveChanges.xml in %s',buildDir);
             });
         }
-    });
+}
 
 program.parse(process.argv);

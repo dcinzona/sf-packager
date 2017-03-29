@@ -44,24 +44,44 @@ var git = {
 }
 
 program
+    .version(packageVersion)    
+    .parse(process.argv)
+
+program
+    .version(packageVersion)
+    .command('fromhere')
+    .arguments( '<targetBranch> <directory> <deploymentName>', 'Compare the current branch to the target specified')
+    .description('Creates the package.xml file using your current branch and checks it against another branch. checking, timestamp, or commit')
+    .action( function(targetBranch,directory,deploymentName){
+        
+        var currentBranch = git.branch().trim();
+        console.log('Current Branch: '+ currentBranch);
+        console.log(directory);
+        console.log(deploymentName);
+    }) 
+    .parse(process.argv)
+
+program
     .version(packageVersion)
     .command('create')
-    .description('Creates the package.xml file')
-    .option('-o, --output [targetDirectory]','Directory to save deployments. Defaults to "./deploy".  Overrides dryrun')
+    .alias('make')
+    .description('Creates the package.xml file using your current branch and checks it against another branch. checking, timestamp, or commit')
     .option('-b, --targetBranch <targetBranch>','Branch to compare to')
-    .option('-s, --sourceBranch <sourceBranch>','Branch to compare with and copy files from (usually current branch)')
-    .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
     .option('-c, --commit <sinceCommit>', 'Compare commits on current branch instead of branch compare')
     .option('-t, --timeframe <tf>', 'Compare by timestamp - since date on current branch ex: "@{1.day.ago}"',/^@{\d\.(day|days|hour|hours|month|months).ago}$/i)
-    .option('--debug', 'Show debug variables')
+    .option('-o, --output [targetDirectory]','Directory to save deployments. Defaults to "./deploy".  Overrides dryrun','./deploy/')
+    .option('-f, --folder <deploymentFolder>','The name of the folder that will contain your unmanaged packages')
+    .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
+    .option('-D, --debug', 'Show debug variables')
     .action(function(options){
         if(options.debug){
             console.log('options.targetBranch: ' + options.targetBranch);
-            console.log('options.sourceBranch: ' + options.sourceBranch);
             console.log('options.timeframe: ' + options.timeframe);
             console.log('options.commit: ' + options.commit);
             console.log('options.output: ' + options.output);
             console.log('options.dryrun: ' + options.dryrun);
+            console.log('options.folder: ' + options.folder);
+            console.log('unpackaged directory:'+ options.output + options.folder)
         }
 
         var gitDiff;
@@ -87,7 +107,7 @@ program
         }else if (options.targetBranch) {
             var sourceBranch = options.sourceBranch;
             if(!options.sourceBranch){
-                sourceBranch = 'HEAD';
+                sourceBranch = 'HEAD~1';
             }
             gitOpts.push([options.target, sourceBranch]);
             deploymentFolder = options.targetBranch;
@@ -114,12 +134,10 @@ program
         execute(options.output, gitDiff, deploymentFolder, options.dryrun);
     });
 
-program
-    .command('deploy <env>')
-    .description('TODO: Deploy the given environment')
-    .action(function(env){
-      console.log('deploying "%s"', env);
-    });
+program.parse(process.argv);
+if (!program.args.length) {
+    showHelp();
+}
 
 
 function execute(outputDir, gitDiff, deploymentFolder, dryrun){
@@ -267,4 +285,3 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         }
 }
 
-program.parse(process.argv);

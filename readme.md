@@ -9,6 +9,8 @@ git clone https://github.com/dcinzona/sf-packager.git && cd sf-packager && npm l
 
 ## Usage
 
+Note: TargetBranch is the branch to which you want to bring up to speed (i.e. sourceBranch > targetBranch)
+
 ### Specifying source and target branches
 ```
 $ sfpackage frombranch sourceBranch targetBranch ./deploy/ packageName

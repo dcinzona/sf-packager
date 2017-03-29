@@ -120,7 +120,7 @@ program
     .alias('g')
     .action(function(cmd, opts){
         //program.debug = true;
-        if(program.debug)log('');
+        debug('\nOptions\n', true);
         debug(sprintf('args: %j', opts));
         log(git[cmd](opts));
         process.exit(1);
@@ -130,6 +130,7 @@ program
     .version(packageVersion)    
     .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
     .option('--debug', 'Show debug variables')
+    .option('--verbose', 'Use verbose logging')
     .parse(process.argv)
 
 program
@@ -144,6 +145,7 @@ program
     .option('-p, --packageName <packageName>','The name of the folder that will contain your unmanaged packages')
     .action(function(opts){
         options = opts;
+        debug('\nOptions\n', true);
         buildGitDiff(options);
     });
 
@@ -153,6 +155,7 @@ program
     .arguments( '<targetBranch> [outputDirectory] [packageName]', 'Compare the current branch to the target specified')
     .description('Creates the package.xml file by comparing the current branch to another branch')
     .action( function(targetBranch, outputDirectory, packageName){
+        debug('\nOptions\n', true);
         branchBuild(git.branch().trim(), targetBranch, outputDirectory, packageName);
     });
 
@@ -162,11 +165,13 @@ program
     .arguments( '<sourceBranch> <targetBranch> [outputDirectory] [packageName]', 'Compare two branches')
     .description('Creates the package.xml file by comparing two branches')
     .action( function(sourceBranch, targetBranch, outputDirectory, packageName){
+        debug('\nOptions\n', true);
         branchBuild(sourceBranch,targetBranch,outputDirectory,packageName);
     })
 
 
 program.parse(process.argv);
+
 
 if (!program.args.length) {
     showHelp();
@@ -199,7 +204,6 @@ function buildGitDiff(options){
         program.help();
         process.exit(1);
     }
-
     debug('options.sourceBranch: ' + options.sourceBranch);
     debug('options.targetBranch: ' + options.targetBranch);
     debug('options.timeframe: ' + options.timeframe);
@@ -211,7 +215,7 @@ function buildGitDiff(options){
     var gitDiff;
     var deploymentFolder;
     var timeframe;
-    var gitOpts = ['--no-pager', 'diff', '--name-status'];
+    var gitOpts = ['--no-pager', 'diff', '--name-status', '-M100%'];
 
     if(options.timeframe === true){
         error('Error: invalid timeframe specified.  Please use the format @{1.day.ago}');
@@ -301,18 +305,33 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         fileList = gitDiffStdOut.split('\n');
 
         //fileList.length > 0 && fileList[0] != '' ? info('Files detected as changed', true) : info('No changes detected', true);
-        info('\nFiles detected as changed\n', true);
         if(fileList.length == 1 && fileList[0] == '') {
+            info('\nFiles detected as changed\n', true);
             info('No changes detected...exiting', false);
             process.exit(0);
         }
+        else if(program.verbose || program.debug){
+            var otherFiles = [];
+            fileList.forEach(function (fileName, index) {
+                var operation = fileName.slice(0,1);
+                fileName = fileName.slice(1).trim();
+                var op = operation == 'A' ? color.cyan('Added') : operation == 'M' ? color.yellow('Modified') : operation == 'D' ? color.red('Deleted') : sprintf('[%s]',operation);
+                if(!fileName.startsWith('src/') & fileName != ''){
+                    otherFiles.push(sprintf('%s %s', op, fileName))
+                }
+            });
+            otherFiles.forEach(function(f,i){
+                if(i == 0)
+                    dorv('\nNon-Salesforce files detected as changed\n', true);
+                dorv(f);
+            });
+        }
+        var displayedSFHEader = false;
         fileList.forEach(function (fileName, index) {
             // get the git operation
             var operation = fileName.slice(0,1);
             // remove the operation and spaces from fileName
             fileName = fileName.slice(1).trim();
-            if(fileName) info(' - ' + fileName);
-
             //ensure file is inside of src directory of project
             if (fileName && fileName.substring(0,3) === 'src') {
 
@@ -340,8 +359,13 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                 }
 
                 if (operation === 'A' || operation === 'M') {
+                    if(!displayedSFHEader) {
+                        dorv('\nSalesforce source files detected as changed\n', true);
+                        displayedSFHEader = true;
+                    }
                     // file was added or modified - add fileName to array for unpackaged and to be copied
-                    info(sprintf('File was added or modified: %s', fileName));
+                    var op = operation == 'A' ? color.cyan('Added') : operation == 'M' ? color.yellow('Modified') : operation == 'D' ? color.red('Deleted') : sprintf('[%s]',operation);
+                    dorv(sprintf('%s %s', op, fileName));
                     fileListForCopy.push(fileName);
 
                     if (!metaBag.hasOwnProperty(parts[1])) {
@@ -352,8 +376,12 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                         metaBag[parts[1]].push(meta);
                     }
                 } else if (operation === 'D') {
+                    if(!displayedSFHEader) {
+                        dorv('\nSalesforce source files detected as changed\n', true);
+                        displayedSFHEader = true;
+                    }
                     // file was deleted
-                    info(sprintf('File was deleted: %s', fileName));
+                    dorv(sprintf('%s %s',color.red('Deleted'), fileName));
                     deletesHaveOccurred = true;
 
                     if (!metaBagDestructive.hasOwnProperty(parts[1])) {
@@ -413,6 +441,18 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                 info(sprintf('Successfully created destructiveChanges.xml in %s',buildDir));
             });
         }
+}
+
+function dorv(message, header){
+    if(program.debug || program.verbose){
+        program.debug ? debug(message, header) : verbose(message, header);
+    }
+}
+
+function verbose(message, header){
+    if(program.verbose){
+        log(message, header);
+    }
 }
 
 function debug(message, header){

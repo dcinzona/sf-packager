@@ -19,11 +19,13 @@ var util = require('util'),
     packageWriter = require('./lib/metaUtils').packageWriter,
     buildPackageDir = require('./lib/metaUtils').buildPackageDir,
     copyFiles = require('./lib/metaUtils').copyFiles,
-    packageVersion = require('./package.json').version;
+    packageVersion = require('./package.json').version,
+    sprintf = require("sprintf-js").sprintf,
+    color = require('colors-cli/safe');
 
 function showHelp(missingArgs){
     if(missingArgs)
-        console.error('Error: Missing required arguments');
+        error('Error: Missing required arguments');
     program.help(); 
     process.exit(1);
 }
@@ -43,102 +45,158 @@ var git = {
     }
 }
 
+var options = {
+    sourceBranch : false,
+    targetBranch : false,
+    commit : false,
+    timeframe : false,
+    output : false,
+    folder : false
+}
+
 program
     .version(packageVersion)    
+    .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
+    .option('--debug', 'Show debug variables')
     .parse(process.argv)
 
 program
-    .version(packageVersion)
-    .command('fromhere')
-    .arguments( '<targetBranch> <directory> <deploymentName>', 'Compare the current branch to the target specified')
-    .description('Creates the package.xml file using your current branch and checks it against another branch. checking, timestamp, or commit')
-    .action( function(targetBranch,directory,deploymentName){
-        
-        var currentBranch = git.branch().trim();
-        console.log('Current Branch: '+ currentBranch);
-        console.log(directory);
-        console.log(deploymentName);
-    }) 
-    .parse(process.argv)
-
-program
-    .version(packageVersion)
     .command('create')
     .alias('make')
     .description('Creates the package.xml file using your current branch and checks it against another branch. checking, timestamp, or commit')
-    .option('-b, --targetBranch <targetBranch>','Branch to compare to')
+    .option('-s, --sourceBranch <sourceBranch>','Source branch to compare')
+    .option('-b, --targetBranch <targetBranch>','Target branch to compare to')
     .option('-c, --commit <sinceCommit>', 'Compare commits on current branch instead of branch compare')
-    .option('-t, --timeframe <tf>', 'Compare by timestamp - since date on current branch ex: "@{1.day.ago}"',/^@{\d\.(day|days|hour|hours|month|months).ago}$/i)
+    .option('-t, --timeframe <timeframe>', 'Compare by timestamp - since date on current branch ex: "@{1.day.ago}"',/^@{\d\.(day|days|hour|hours|month|months).ago}$/i)
     .option('-o, --output [targetDirectory]','Directory to save deployments. Defaults to "./deploy".  Overrides dryrun','./deploy/')
     .option('-f, --folder <deploymentFolder>','The name of the folder that will contain your unmanaged packages')
-    .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
-    .option('-D, --debug', 'Show debug variables')
-    .action(function(options){
-        if(options.debug){
-            console.log('options.targetBranch: ' + options.targetBranch);
-            console.log('options.timeframe: ' + options.timeframe);
-            console.log('options.commit: ' + options.commit);
-            console.log('options.output: ' + options.output);
-            console.log('options.dryrun: ' + options.dryrun);
-            console.log('options.folder: ' + options.folder);
-            console.log('unpackaged directory:'+ options.output + options.folder)
-        }
-
-        var gitDiff;
-        var deploymentFolder;
-        var timeframe;
-        var gitOpts = ['--no-pager', 'diff', '--name-status'];
-
-        if(options.timeframe === true){
-            console.error('Error: invalid timeframe specified.  Please use the format @{1.day.ago}');
-            process.exit(1);
-        }else{
-            timeframe = options.timeframe;
-        }
-
-        if(options.commit){
-            if(options.targetBranch || options.sourceBranch){
-                console.error('Error: commit flag cannot be used with sourceBranch or targetBranch');
-                process.exit(1);
-            }else{
-                gitOpts.push(options.commit);
-            }
-            deploymentFolder = options.commit;
-        }else if (options.targetBranch) {
-            var sourceBranch = options.sourceBranch;
-            if(!options.sourceBranch){
-                sourceBranch = 'HEAD~1';
-            }
-            gitOpts.push([options.target, sourceBranch]);
-            deploymentFolder = options.targetBranch;
-        } else if(options.sourceBranch) {
-            console.error('Error: target branch is required required when source is specified');
-            program.help();
-            process.exit(1);
-        }else if(!timeframe){
-            console.error('Error: missing required options');
-            program.help();
-            process.exit(1);
-        }
-
-        if(timeframe){
-            gitOpts.push(timeframe);
-        }
-
-        gitDiff = spawnSync('git', gitOpts);
-
-        //set deploymentFolder
-        var currentBranch = git.branch();
-        if(options.debug) console.log('current branch: ' + git.branch());
-
-        execute(options.output, gitDiff, deploymentFolder, options.dryrun);
+    .action(function(opts){
+        debug('options.sourceBranch: ' + opts.sourceBranch);
+        debug('options.targetBranch: ' + opts.targetBranch);
+        debug('options.timeframe: ' + opts.timeframe);
+        debug('options.commit: ' + opts.commit);
+        debug('options.output: ' + opts.output);
+        debug('options.dryrun: ' + opts.dryrun);
+        debug('options.folder: ' + opts.folder);
+        debug('unpackaged directory:'+ opts.output + opts.folder)
+        options = opts;
+        buildGitDiff(options);
     });
 
+program
+    .command('fromcurrent')
+    .alias('fc')
+    .arguments( '<targetBranch> [outputDirectory] [deploymentName]', 'Compare the current branch to the target specified')
+    .description('Creates the package.xml file by comparing the current branch to another branch')
+    .action( function(targetBranch, outputDirectory, deploymentName){
+        branchBuild(git.branch().trim(), targetBranch, outputDirectory, deploymentName);
+    });
+
+program
+    .command('frombranch')
+    .alias('fb')
+    .arguments( '<sourceBranch> <targetBranch> [outputDirectory] [deploymentName]', 'Compare two branches')
+    .description('Creates the package.xml file by comparing two branches')
+    .action( function(sourceBranch, targetBranch, outputDirectory, deploymentName){
+        branchBuild(sourceBranch,targetBranch,outputDirectory,deploymentName);
+    })
+
+
 program.parse(process.argv);
+
 if (!program.args.length) {
     showHelp();
 }
 
+function branchBuild(sourceBranch, targetBranch, outputDirectory, deploymentName){
+
+        var options = {};
+
+        if(!outputDirectory){
+            outputDirectory = './deploy';
+        }
+        if(!deploymentName){
+            deploymentName = 'diff_'+targetBranch;
+        }
+
+        options.targetBranch = targetBranch;
+        options.sourceBranch = sourceBranch;
+        options.output = outputDirectory;
+        options.folder = deploymentName;
+        
+        debug(options);
+
+        buildGitDiff(options);
+}
+
+function buildGitDiff(options){
+
+    if(!options){
+        program.help();
+        process.exit(1);
+    }
+
+    debug('options.sourceBranch: ' + options.sourceBranch);
+    debug('options.targetBranch: ' + options.targetBranch);
+    debug('options.timeframe: ' + options.timeframe);
+    debug('options.commit: ' + options.commit);
+    debug('options.output: ' + options.output);
+    debug('program.dryrun: ' + program.dryrun);
+    debug('options.folder: ' + options.folder);
+    debug('unpackaged directory:'+ options.output + options.folder);
+
+    var gitDiff;
+    var deploymentFolder;
+    var timeframe;
+    var gitOpts = ['--no-pager', 'diff', '--name-status'];
+
+    if(options.timeframe === true){
+        error('Error: invalid timeframe specified.  Please use the format @{1.day.ago}');
+        process.exit(1);
+    }else{
+        timeframe = options.timeframe;
+    }
+
+    if(options.commit){
+        if(options.targetBranch || options.sourceBranch){
+            error('Error: commit flag cannot be used with sourceBranch or targetBranch');
+            process.exit(1);
+        }else{
+            gitOpts.push(options.commit);
+        }
+        deploymentFolder = options.commit;
+    }else if (options.targetBranch) {
+        var sourceBranch = options.sourceBranch;
+        if(!options.sourceBranch){
+            sourceBranch = 'HEAD~1';
+        }
+        gitOpts.push(options.targetBranch);
+        gitOpts.push(sourceBranch);
+        deploymentFolder = !options.folder ? options.targetBranch : options.folder;
+    } else if(options.sourceBranch) {
+        error('Error: target branch is required required when source is specified');
+        program.help();
+        process.exit(1);
+    }else if(!timeframe){
+        error('Error: missing required options');
+        program.help();
+        process.exit(1);
+    }
+
+    if(timeframe){
+        gitOpts.push(timeframe);
+    }
+
+    debug(gitOpts);
+
+    gitDiff = spawnSync('git', gitOpts);
+
+    //set deploymentFolder
+    var currentBranch = git.branch();
+    debug('current branch: ' + git.branch());
+
+    execute(options.output, gitDiff, deploymentFolder, program.dryrun);
+}
 
 function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         
@@ -149,11 +207,11 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
 
         if (!dryrun && !outputDir) {
             outputDir = './deploy';
-            console.log("using default target './deploy'");
-            //console.error('target required when not dry-run');
+            //error('target required when not dry-run');
             //program.help();
             //process.exit(1);
         }
+        debug(sprintf("using default target %s", outputDir));
 
         var target = outputDir;
 
@@ -162,7 +220,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         var gitDiffStdErr = gitDiff.stderr.toString('utf8');
 
         if (gitDiffStdErr) {
-            console.error('An error has occurred: %s', gitDiffStdErr);
+            error('An error has occurred: %s', gitDiffStdErr);
             process.exit(1);
         }
 
@@ -176,14 +234,18 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
 
         fileList = gitDiffStdOut.split('\n');
 
-        console.log('\nFiles detected as changed:');
-
+        //fileList.length > 0 && fileList[0] != '' ? info('Files detected as changed', true) : info('No changes detected', true);
+        info('\nFiles detected as changed\n', true);
+        if(fileList.length == 1 && fileList[0] == '') {
+            info('No changes detected...exiting', false);
+            process.exit(0);
+        }
         fileList.forEach(function (fileName, index) {
             // get the git operation
             var operation = fileName.slice(0,1);
             // remove the operation and spaces from fileName
             fileName = fileName.slice(1).trim();
-            if(fileName) console.log(' - ' + fileName);
+            if(fileName) info(' - ' + fileName);
 
             //ensure file is inside of src directory of project
             if (fileName && fileName.substring(0,3) === 'src') {
@@ -197,7 +259,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                 // Check for invalid fileName, likely due to data stream exceeding buffer size resulting in incomplete string
                 // TODO: need a way to ensure that full fileNames are processed - increase buffer size??
                 if (parts[2] === undefined) {
-                    console.error('File name "%s" cannot be processed, exiting', fileName);
+                    error(sprintf('\nFile name "%s" cannot be processed, exiting', fileName));
                     process.exit(1);
                 }
 
@@ -213,7 +275,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
 
                 if (operation === 'A' || operation === 'M') {
                     // file was added or modified - add fileName to array for unpackaged and to be copied
-                    console.log('File was added or modified: %s', fileName);
+                    info(sprintf('File was added or modified: %s', fileName));
                     fileListForCopy.push(fileName);
 
                     if (!metaBag.hasOwnProperty(parts[1])) {
@@ -225,7 +287,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                     }
                 } else if (operation === 'D') {
                     // file was deleted
-                    console.log('File was deleted: %s', fileName);
+                    info(sprintf('File was deleted: %s', fileName));
                     deletesHaveOccurred = true;
 
                     if (!metaBagDestructive.hasOwnProperty(parts[1])) {
@@ -237,7 +299,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                     }
                 } else {
                     // situation that requires review
-                    return console.error('Operation on file needs review: %s', fileName);
+                    return error(sprintf('Operation on file needs review: %s', fileName));
                 }
             }
         });
@@ -247,29 +309,31 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         //build destructiveChanges file content
         var destructiveXML = packageWriter(metaBagDestructive);
         if (dryrun) {
-            console.log('\nResulting package.xml\n');
-            console.log(packageXML);
-            console.log('\nResulting destructiveChanges.xml\n');
-            console.log(destructiveXML);
+            info('\nResulting package.xml\n', true);
+            info(packageXML);
+            info('\nResulting destructiveChanges.xml\n', true);
+            info(destructiveXML);
             process.exit(0);
         }
+        info(sprintf('\nBuild log'), true);
 
-        console.log('Building in directory %s', target);
+        info(sprintf('\nBuilding in directory %s', target));
 
         if(!deploymentFolder){
-            console.error('Error: output folder was undefined');
+            error('\nError: output folder was undefined');
             process.exit(1);
         }
-        console.log('Saving deployment to folder: ', deploymentFolder);
+
+        info(sprintf('Saving deployment to folder: %s', deploymentFolder));
 
         buildPackageDir(target, deploymentFolder, metaBag, packageXML, false, (err, buildDir) => {
 
             if (err) {
-                return console.error(err);
+                return error(err);
             }
 
             copyFiles(currentDir, buildDir, fileListForCopy);
-            console.log('Successfully created package.xml and files in %s',buildDir);
+            info(sprintf('Successfully created package.xml and files in %s',buildDir));
 
         });
 
@@ -277,11 +341,31 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
             buildPackageDir(target, deploymentFolder, metaBagDestructive, destructiveXML, true, (err, buildDir) => {
 
                 if (err) {
-                    return console.error(err);
+                    return error(err);
                 }
 
-                console.log('Successfully created destructiveChanges.xml in %s',buildDir);
+                info(sprintf('Successfully created destructiveChanges.xml in %s',buildDir));
             });
         }
 }
 
+function debug(message, header){
+    if(program.debug){
+        if(typeof message == typeof {}){
+            message = JSON.stringify(message);
+        }
+        !header ? console.info('[DEBUG] ' + color.x230(message)) : console.info(color.x229.underline(message))
+    }
+}
+function info(message, header){
+    if(typeof message == typeof {}){
+        message = JSON.stringify(message);
+    }
+    !header ? console.info(color.x253(message)) : console.info(color.green.x34.underline(message))
+}
+function error(message){
+    if(typeof message == typeof {}){
+        message = JSON.stringify(message);
+    }
+    console.error(color.red(message));
+}

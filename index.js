@@ -119,8 +119,8 @@ program
     .arguments('<cmd> [opts...]')
     .alias('g')
     .action(function(cmd, opts){
-        program.debug = true;
-        log('');
+        //program.debug = true;
+        if(program.debug)log('');
         debug(sprintf('args: %j', opts));
         log(git[cmd](opts));
         process.exit(1);

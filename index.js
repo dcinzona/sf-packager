@@ -94,6 +94,7 @@ var git = {
         return files.join('\n');
     },
     test : function(){
+        /*
         var gitOpts = ['whatchanged', '--format=oneline', '--name-status', '--since="6 hours ago"' ];
         debug(gitOpts);
         log('\nResults',true);
@@ -102,6 +103,21 @@ var git = {
         var re = /^[DAM](.*)/g;
         var s1 = grep.stdout.toString('utf8');//.replace(re,"$1");
         return s1; // | grep "^:" | sed "s:.*\([DAM]\)[ \\''t]*\([^ \\''t]*\):\1\2:g"')
+        */
+        //git --no-pager diff $(git rev-list -1 --before="1 month ago" origin/full2) $(git rev-list -1 --before="1 month ago" master) --name-status -M100%
+        var s1 = spawnSync('git', ['rev-list', '-1', '--before="1 month ago"', 'origin/full2']).stdout.toString('utf8').trim();
+        console.log(s1.trim());
+        var s2 = spawnSync('git', ['rev-list', '-1', '--before="1 month ago"', 'master']).stdout.toString('utf8').trim();
+        console.log(s2);
+        return spawnSync('git', ['--no-pager', 'diff', '--name-status', '-M100%', s1,s2]).stdout.toString('utf8');
+    },
+    spawnSync : function(since, targetBranch, sourceBranch){
+        var s1 = spawnSync('git', ['rev-list', '-1', '--before="'+since+'"', targetBranch]).stdout.toString('utf8').trim();
+        var s2 = spawnSync('git', ['rev-list', '-1', sourceBranch]).stdout.toString('utf8').trim();
+        return spawnSync('git', ['--no-pager', 'diff', '--name-status', '-M100%', s1,s2]);
+    },
+    getDiff : function(since, targetBranch, sourceBranch){
+        return git.spawnSync(since, targetBranch,sourceBranch).stdout.toString('utf8');
     }
 }
 
@@ -113,6 +129,24 @@ var options = {
     output : false,
     packageName : false
 }
+
+program
+    .command('since')
+    .alias('s')
+    .arguments( '<since> <targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
+    .description('Creates the package.xml file by comparing two branches')
+    .action( function(since, targetBranch, sourceBranch, outputDirectory, packageName){
+        if(!outputDirectory){
+            outputDirectory = './deploy';
+        }
+        if(!packageName){
+            packageName = 'diff_'+targetBranch;
+        }
+        if(!sourceBranch){
+            sourceBranch = git.branch().trim();
+        }
+        execute(outputDirectory, git.spawnSync(since, targetBranch, sourceBranch), packageName, program.dryrun);
+    })
 
 program
     .command('checkgit')

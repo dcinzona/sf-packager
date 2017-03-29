@@ -16,12 +16,14 @@
 var program = require('commander');
 var util = require('util'),
     spawnSync = require('child_process').spawnSync,
+    cp = require('child_process'),
     packageWriter = require('./lib/metaUtils').packageWriter,
     buildPackageDir = require('./lib/metaUtils').buildPackageDir,
     copyFiles = require('./lib/metaUtils').copyFiles,
     packageVersion = require('./package.json').version,
     sprintf = require("sprintf-js").sprintf,
-    color = require('colors-cli/safe');
+    color = require('colors-cli/safe'),
+    typeOf = require('./lib/typeof');
 
 function showHelp(missingArgs){
     if(missingArgs)
@@ -42,6 +44,64 @@ var git = {
     },
     tag : function(){
         return spawnSync('git', ['describe', '--always', '--tag', '--abbrev=0']).stdout.toString('utf8');
+    },
+    diff : function(opts){
+        var gitOpts = ['--no-pager', 'diff', '--name-status'];
+        if(typeOf(opts) == 'array'){
+            opts.forEach(function(opt, index){
+                gitOpts.push(opt);
+            });
+        }
+        debug(gitOpts);
+        log('\nResults',true);
+        var gitCmd = spawnSync('git', gitOpts);
+        var gitDiffStdErr = gitCmd.stderr.toString('utf8');
+        if(gitDiffStdErr){
+            error(sprintf('An error has occurred: %s', gitDiffStdErr));
+        }
+        return gitCmd.stdout.toString('utf8');
+    },
+    whatchanged : function(opts){
+        var gitOpts = ['whatchanged', '--format=oneline', '--name-status' ];
+        
+        if(typeOf(opts) == 'array'){
+            opts.forEach(function(opt, index){
+                if(opt.startsWith('since')) opt = '--'+opt;
+                gitOpts.push(opt);
+            });
+        }
+        debug(gitOpts);
+        log('\nResults',true);
+        var g = cp.spawnSync('git', gitOpts);
+        var grep = cp.spawnSync('grep', ['^[DAM]'], { input : g.stdout});
+        var s1 = grep.stdout.toString('utf8');
+        //go line by line and get unique values
+        var lines = s1.split("\n");
+        var files = [];
+        var fileNames = [];
+        lines.forEach(function(line, index){
+            if(line!= ''){
+                var spl = line.split('\t');
+                var fn = spl[1];
+                debug(spl + fileNames.indexOf(fn));
+
+                if(fileNames.indexOf(fn) == -1){
+                    fileNames.push(fn);
+                    files.push(line);
+                }
+            }
+        });
+        return files.join('\n');
+    },
+    test : function(){
+        var gitOpts = ['whatchanged', '--format=oneline', '--name-status', '--since="6 hours ago"' ];
+        debug(gitOpts);
+        log('\nResults',true);
+        var g = cp.spawnSync('git', gitOpts);
+        var grep = cp.spawnSync('grep', ['^[DAM]'], { input : g.stdout});
+        var re = /^[DAM](.*)/g;
+        var s1 = grep.stdout.toString('utf8');//.replace(re,"$1");
+        return s1; // | grep "^:" | sed "s:.*\([DAM]\)[ \\''t]*\([^ \\''t]*\):\1\2:g"')
     }
 }
 
@@ -56,11 +116,13 @@ var options = {
 
 program
     .command('checkgit')
-    .arguments('<cmd>')
-    .alias('cg')
-    .action(function(cmd){
+    .arguments('<cmd> [opts...]')
+    .alias('g')
+    .action(function(cmd, opts){
         program.debug = true;
-        debug(git[cmd]());
+        log('');
+        debug(sprintf('args: %j', opts));
+        log(git[cmd](opts));
         process.exit(1);
     });
 

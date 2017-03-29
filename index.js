@@ -51,8 +51,18 @@ var options = {
     commit : false,
     timeframe : false,
     output : false,
-    folder : false
+    packageName : false
 }
+
+program
+    .command('checkgit')
+    .arguments('<cmd>')
+    .alias('cg')
+    .action(function(cmd){
+        program.debug = true;
+        debug(git[cmd]());
+        process.exit(1);
+    });
 
 program
     .version(packageVersion)    
@@ -68,17 +78,9 @@ program
     .option('-b, --targetBranch <targetBranch>','Target branch to compare to')
     .option('-c, --commit <sinceCommit>', 'Compare commits on current branch instead of branch compare')
     .option('-t, --timeframe <timeframe>', 'Compare by timestamp - since date on current branch ex: "@{1.day.ago}"',/^@{\d\.(day|days|hour|hours|month|months).ago}$/i)
-    .option('-o, --output [targetDirectory]','Directory to save deployments. Defaults to "./deploy".  Overrides dryrun','./deploy/')
-    .option('-f, --folder <deploymentFolder>','The name of the folder that will contain your unmanaged packages')
+    .option('-o, --output [targetDirectory]','Directory to save deployments. Defaults to "./deploy/".  Overrides dryrun','./deploy/')
+    .option('-p, --packageName <packageName>','The name of the folder that will contain your unmanaged packages')
     .action(function(opts){
-        debug('options.sourceBranch: ' + opts.sourceBranch);
-        debug('options.targetBranch: ' + opts.targetBranch);
-        debug('options.timeframe: ' + opts.timeframe);
-        debug('options.commit: ' + opts.commit);
-        debug('options.output: ' + opts.output);
-        debug('options.dryrun: ' + opts.dryrun);
-        debug('options.folder: ' + opts.folder);
-        debug('unpackaged directory:'+ opts.output + opts.folder)
         options = opts;
         buildGitDiff(options);
     });
@@ -86,19 +88,19 @@ program
 program
     .command('fromcurrent')
     .alias('fc')
-    .arguments( '<targetBranch> [outputDirectory] [deploymentName]', 'Compare the current branch to the target specified')
+    .arguments( '<targetBranch> [outputDirectory] [packageName]', 'Compare the current branch to the target specified')
     .description('Creates the package.xml file by comparing the current branch to another branch')
-    .action( function(targetBranch, outputDirectory, deploymentName){
-        branchBuild(git.branch().trim(), targetBranch, outputDirectory, deploymentName);
+    .action( function(targetBranch, outputDirectory, packageName){
+        branchBuild(git.branch().trim(), targetBranch, outputDirectory, packageName);
     });
 
 program
     .command('frombranch')
     .alias('fb')
-    .arguments( '<sourceBranch> <targetBranch> [outputDirectory] [deploymentName]', 'Compare two branches')
+    .arguments( '<sourceBranch> <targetBranch> [outputDirectory] [packageName]', 'Compare two branches')
     .description('Creates the package.xml file by comparing two branches')
-    .action( function(sourceBranch, targetBranch, outputDirectory, deploymentName){
-        branchBuild(sourceBranch,targetBranch,outputDirectory,deploymentName);
+    .action( function(sourceBranch, targetBranch, outputDirectory, packageName){
+        branchBuild(sourceBranch,targetBranch,outputDirectory,packageName);
     })
 
 
@@ -108,21 +110,21 @@ if (!program.args.length) {
     showHelp();
 }
 
-function branchBuild(sourceBranch, targetBranch, outputDirectory, deploymentName){
+function branchBuild(sourceBranch, targetBranch, outputDirectory, packageName){
 
         var options = {};
 
         if(!outputDirectory){
             outputDirectory = './deploy';
         }
-        if(!deploymentName){
-            deploymentName = 'diff_'+targetBranch;
+        if(!packageName){
+            packageName = 'diff_'+targetBranch;
         }
 
         options.targetBranch = targetBranch;
         options.sourceBranch = sourceBranch;
         options.output = outputDirectory;
-        options.folder = deploymentName;
+        options.packageName = packageName;
         
         debug(options);
 
@@ -141,9 +143,8 @@ function buildGitDiff(options){
     debug('options.timeframe: ' + options.timeframe);
     debug('options.commit: ' + options.commit);
     debug('options.output: ' + options.output);
-    debug('program.dryrun: ' + program.dryrun);
-    debug('options.folder: ' + options.folder);
-    debug('unpackaged directory:'+ options.output + options.folder);
+    debug('options.dryrun: ' + options.dryrun);
+    debug('options.packageName: ' + options.packageName);
 
     var gitDiff;
     var deploymentFolder;
@@ -172,7 +173,7 @@ function buildGitDiff(options){
         }
         gitOpts.push(options.targetBranch);
         gitOpts.push(sourceBranch);
-        deploymentFolder = !options.folder ? options.targetBranch : options.folder;
+        deploymentFolder = !options.packageName ? options.targetBranch : options.packageName;
     } else if(options.sourceBranch) {
         error('Error: target branch is required required when source is specified');
         program.help();
@@ -187,13 +188,16 @@ function buildGitDiff(options){
         gitOpts.push(timeframe);
     }
 
-    debug(gitOpts);
+    debug(sprintf('Git command: `git %s`',gitOpts.join(' ')));
 
     gitDiff = spawnSync('git', gitOpts);
 
-    //set deploymentFolder
-    var currentBranch = git.branch();
-    debug('current branch: ' + git.branch());
+    var currentBranch = git.branch().trim();
+    debug(sprintf('current branch: %s', currentBranch));
+
+    deploymentFolder = options.packageName ? options.packageName : deploymentFolder;
+
+    debug('unpackaged directory: '+ options.output + deploymentFolder);
 
     execute(options.output, gitDiff, deploymentFolder, program.dryrun);
 }
@@ -210,8 +214,8 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
             //error('target required when not dry-run');
             //program.help();
             //process.exit(1);
+            debug(sprintf("using default target %s", outputDir));
         }
-        debug(sprintf("using default target %s", outputDir));
 
         var target = outputDir;
 
@@ -220,7 +224,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         var gitDiffStdErr = gitDiff.stderr.toString('utf8');
 
         if (gitDiffStdErr) {
-            error('An error has occurred: %s', gitDiffStdErr);
+            error(sprintf('An error has occurred: %s', gitDiffStdErr));
             process.exit(1);
         }
 
@@ -357,11 +361,14 @@ function debug(message, header){
         !header ? console.info('[DEBUG] ' + color.x230(message)) : console.info(color.x229.underline(message))
     }
 }
+function log(message, header){
+    info(message,header);
+}
 function info(message, header){
     if(typeof message == typeof {}){
         message = JSON.stringify(message);
     }
-    !header ? console.info(color.x253(message)) : console.info(color.green.x34.underline(message))
+    !header ? console.log(color.x253(message)) : console.log(color.green.x34.underline(message))
 }
 function error(message){
     if(typeof message == typeof {}){

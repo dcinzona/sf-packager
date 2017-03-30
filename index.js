@@ -23,85 +23,9 @@ var util = require('util'),
     packageVersion = require('./package.json').version,
     sprintf = require("sprintf-js").sprintf,
     color = require('colors-cli/safe'),
-    typeOf = require('./lib/typeof');
-
-function showHelp(missingArgs){
-    if(missingArgs)
-        error('Error: Missing required arguments');
-    program.help(); 
-    process.exit(1);
-}
-
-var git = {
-    branch : function(){
-        return spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD']).stdout.toString('utf8');
-    },
-    long : function(){
-        return spawnSync('git', ['rev-parse', 'HEAD']).stdout.toString('utf8');
-    },
-    short : function(){
-        return spawnSync('git', ['rev-parse', '--short', 'HEAD']).stdout.toString('utf8');
-    },
-    tag : function(){
-        return spawnSync('git', ['describe', '--always', '--tag', '--abbrev=0']).stdout.toString('utf8');
-    },
-    diff : function(opts){
-        var gitOpts = ['--no-pager', 'diff', '--name-status'];
-        if(typeOf(opts) == 'array'){
-            opts.forEach(function(opt, index){
-                gitOpts.push(opt);
-            });
-        }
-        debug(gitOpts);
-        log('\nResults',true);
-        var gitCmd = spawnSync('git', gitOpts);
-        var gitDiffStdErr = gitCmd.stderr.toString('utf8');
-        if(gitDiffStdErr){
-            error(sprintf('An error has occurred: %s', gitDiffStdErr));
-        }
-        return gitCmd.stdout.toString('utf8');
-    },
-    whatchanged : function(opts){
-        var gitOpts = ['whatchanged', '--format=oneline', '--name-status' ];
-        
-        if(typeOf(opts) == 'array'){
-            opts.forEach(function(opt, index){
-                if(opt.startsWith('since')) opt = '--'+opt;
-                gitOpts.push(opt);
-            });
-        }
-        debug(gitOpts);
-        log('\nResults',true);
-        var g = cp.spawnSync('git', gitOpts);
-        var grep = cp.spawnSync('grep', ['^[DAM]'], { input : g.stdout});
-        var s1 = grep.stdout.toString('utf8');
-        //go line by line and get unique values
-        var lines = s1.split("\n");
-        var files = [];
-        var fileNames = [];
-        lines.forEach(function(line, index){
-            if(line!= ''){
-                var spl = line.split('\t');
-                var fn = spl[1];
-                debug(spl + fileNames.indexOf(fn));
-
-                if(fileNames.indexOf(fn) == -1){
-                    fileNames.push(fn);
-                    files.push(line);
-                }
-            }
-        });
-        return files.join('\n');
-    },
-    spawnSync : function(since, targetBranch, sourceBranch){
-        var s1 = spawnSync('git', ['rev-list', '-1', '--before="'+since+'"', targetBranch]).stdout.toString('utf8').trim();
-        var s2 = spawnSync('git', ['rev-list', '-1', sourceBranch]).stdout.toString('utf8').trim();
-        return spawnSync('git', ['--no-pager', 'diff', '--name-status', '-M100%', s1,s2]);
-    },
-    getDiff : function(since, targetBranch, sourceBranch){
-        return git.spawnSync(since, targetBranch,sourceBranch).stdout.toString('utf8');
-    }
-}
+    typeOf = require('./lib/typeof'),
+    git = require('./lib/git'),
+    l = require('./lib/log');
 
 var options = {
     sourceBranch : false,
@@ -119,7 +43,7 @@ program
     .description('Creates the package.xml file by comparing two branches')
     .action( function(since, targetBranch, sourceBranch, outputDirectory, packageName){
         if(!outputDirectory){
-            outputDirectory = './deploy';
+            outputDirectory = './deploy/';
         }
         if(!packageName){
             packageName = 'diff_'+targetBranch;
@@ -127,7 +51,27 @@ program
         if(!sourceBranch){
             sourceBranch = git.branch().trim();
         }
-        execute(outputDirectory, git.spawnSync(since, targetBranch, sourceBranch), packageName, program.dryrun);
+        var spawn = git.spawnSync(since, targetBranch, sourceBranch);
+        execute(outputDirectory, spawn, packageName, program.dryrun);
+    })
+
+program
+    .command('latest')
+    .alias('l')
+    .arguments( '<targetBranch> <sourceBranch> [outputDirectory] [packageName]', 'Compare two branches')
+    .description('Creates the package.xml file by comparing two branches')
+    .action( function(targetBranch, sourceBranch, outputDirectory, packageName){
+        if(!outputDirectory){
+            outputDirectory = './deploy/';
+        }
+        if(!packageName){
+            packageName = 'diff_'+targetBranch;
+        }
+        if(!sourceBranch){
+            sourceBranch = git.branch().trim();
+        }
+        var spawn = git.spawnSync(false, targetBranch, sourceBranch);
+        execute(outputDirectory, spawn, packageName, program.dryrun);
     })
 
 program
@@ -139,154 +83,17 @@ program
         debug('\nOptions\n', true);
         debug(sprintf('args: %j', opts));
         log(git[cmd](opts));
-        process.exit(1);
+        process.exit(0);
     });
 
 program
     .version(packageVersion)    
     .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
-    .option('--debug', 'Show debug variables')
-    .option('--verbose', 'Use verbose logging')
-    .parse(process.argv)
-
-program
-    .command('create')
-    .alias('make')
-    .description('Creates the package.xml file using your current branch and checks it against another branch. checking, timestamp, or commit')
-    .option('-s, --sourceBranch <sourceBranch>','Source branch to compare')
-    .option('-b, --targetBranch <targetBranch>','Target branch to compare to')
-    .option('-c, --commit <sinceCommit>', 'Compare commits on current branch instead of branch compare')
-    .option('-t, --timeframe <timeframe>', 'Compare by timestamp - since date on current branch ex: "@{1.day.ago}"',/^@{\d\.(day|days|hour|hours|month|months).ago}$/i)
-    .option('-o, --output [targetDirectory]','Directory to save deployments. Defaults to "./deploy/".  Overrides dryrun','./deploy/')
-    .option('-p, --packageName <packageName>','The name of the folder that will contain your unmanaged packages')
-    .action(function(opts){
-        options = opts;
-        debug('\nOptions\n', true);
-        buildGitDiff(options);
-    });
-
-program
-    .command('fromcurrent')
-    .alias('fc')
-    .arguments( '<targetBranch> [outputDirectory] [packageName]', 'Compare the current branch to the target specified')
-    .description('Creates the package.xml file by comparing the current branch to another branch')
-    .action( function(targetBranch, outputDirectory, packageName){
-        debug('\nOptions\n', true);
-        branchBuild(git.branch().trim(), targetBranch, outputDirectory, packageName);
-    });
-
-program
-    .command('frombranch')
-    .alias('fb')
-    .arguments( '<sourceBranch> <targetBranch> [outputDirectory] [packageName]', 'Compare two branches')
-    .description('Creates the package.xml file by comparing two branches')
-    .action( function(sourceBranch, targetBranch, outputDirectory, packageName){
-        debug('\nOptions\n', true);
-        branchBuild(sourceBranch,targetBranch,outputDirectory,packageName);
-    })
-
-
-program.parse(process.argv);
-
-
-if (!program.args.length) {
-    showHelp();
-}
-
-function branchBuild(sourceBranch, targetBranch, outputDirectory, packageName){
-
-        var options = {};
-
-        if(!outputDirectory){
-            outputDirectory = './deploy';
-        }
-        if(!packageName){
-            packageName = 'diff_'+targetBranch;
-        }
-
-        options.targetBranch = targetBranch;
-        options.sourceBranch = sourceBranch;
-        options.output = outputDirectory;
-        options.packageName = packageName;
-        
-        debug(options);
-
-        buildGitDiff(options);
-}
-
-function buildGitDiff(options){
-
-    if(!options){
-        program.help();
-        process.exit(1);
-    }
-    debug('options.sourceBranch: ' + options.sourceBranch);
-    debug('options.targetBranch: ' + options.targetBranch);
-    debug('options.timeframe: ' + options.timeframe);
-    debug('options.commit: ' + options.commit);
-    debug('options.output: ' + options.output);
-    debug('options.dryrun: ' + options.dryrun);
-    debug('options.packageName: ' + options.packageName);
-
-    var gitDiff;
-    var deploymentFolder;
-    var timeframe;
-    var gitOpts = ['--no-pager', 'diff', '--name-status', '-M100%'];
-
-    if(options.timeframe === true){
-        error('Error: invalid timeframe specified.  Please use the format @{1.day.ago}');
-        process.exit(1);
-    }else{
-        timeframe = options.timeframe;
-    }
-
-    if(options.commit){
-        if(options.targetBranch || options.sourceBranch){
-            error('Error: commit flag cannot be used with sourceBranch or targetBranch');
-            process.exit(1);
-        }else{
-            gitOpts.push(options.commit);
-        }
-        deploymentFolder = options.commit;
-    }else if (options.targetBranch) {
-        var sourceBranch = options.sourceBranch;
-        if(!options.sourceBranch){
-            sourceBranch = 'HEAD~1';
-        }
-        gitOpts.push(options.targetBranch);
-        gitOpts.push(sourceBranch);
-        deploymentFolder = !options.packageName ? options.targetBranch : options.packageName;
-    } else if(options.sourceBranch) {
-        error('Error: target branch is required required when source is specified');
-        program.help();
-        process.exit(1);
-    }else if(!timeframe){
-        error('Error: missing required options');
-        program.help();
-        process.exit(1);
-    }
-
-    if(timeframe){
-        gitOpts.push(timeframe);
-    }
-
-    debug(sprintf('Git command: `git %s`',gitOpts.join(' ')));
-
-    gitDiff = spawnSync('git', gitOpts);
-
-    var currentBranch = git.branch().trim();
-    debug(sprintf('current branch: %s', currentBranch));
-
-    deploymentFolder = options.packageName ? options.packageName : deploymentFolder;
-
-    debug('unpackaged directory: '+ options.output + deploymentFolder);
-
-    execute(options.output, gitDiff, deploymentFolder, program.dryrun);
-}
+    .option('-D, --debug', 'Show debug variables')
+    .option('-v, --verbose', 'Use verbose logging');
 
 function execute(outputDir, gitDiff, deploymentFolder, dryrun){
-        
-
+    console.log('executing...');
         if(!gitDiff){
             process.exit(1);
         }
@@ -426,16 +233,14 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
             process.exit(0);
         }
         info(sprintf('\nBuild log'), true);
-
         info(sprintf('\nBuilding in directory %s', target));
 
         if(!deploymentFolder){
             error('\nError: output folder was undefined');
             process.exit(1);
         }
-
         info(sprintf('Saving deployment to folder: %s', deploymentFolder));
-
+        
         buildPackageDir(target, deploymentFolder, metaBag, packageXML, false, (err, buildDir) => {
 
             if (err) {
@@ -459,38 +264,40 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         }
 }
 
-function dorv(message, header){
-    if(program.debug || program.verbose){
-        program.debug ? debug(message, header) : verbose(message, header);
-    }
+function showHelp(missingArgs){
+    if(missingArgs)
+        error('Error: Missing required arguments');
+    program.help(); 
+    process.exit(1);
 }
 
+program.parse(process.argv);
+
+if (!program.args || !program.args.length) {
+    showHelp();
+}
+
+
+function dorv(message, header){
+    l.dorv(message, header);
+};
+
 function verbose(message, header){
-    if(program.verbose){
-        log(message, header);
-    }
+    l.verbose(message, header);
 }
 
 function debug(message, header){
-    if(program.debug){
-        if(typeof message == typeof {}){
-            message = JSON.stringify(message);
-        }
-        !header ? console.info('[DEBUG] ' + color.x230(message)) : console.info(color.x229.underline(message))
-    }
+    l.debug(message, header);
 }
+
 function log(message, header){
-    info(message,header);
+    info(message, header);
 }
+
 function info(message, header){
-    if(typeof message == typeof {}){
-        message = JSON.stringify(message);
-    }
-    !header ? console.log(color.x253(message)) : console.log(color.green.x34.underline(message))
+    l.info(message, header);
 }
+
 function error(message){
-    if(typeof message == typeof {}){
-        message = JSON.stringify(message);
-    }
-    console.error(color.red(message));
+    l.error(message);
 }

@@ -40,7 +40,7 @@ program
     .command('since')
     .alias('s')
     .arguments( '<since> <targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
-    .description('Creates the package.xml file by comparing two branches')
+    .description('Creates the package.xml file by comparing a target branch changes since a specified date')
     .action( function(since, targetBranch, sourceBranch, outputDirectory, packageName){
         if(!outputDirectory){
             outputDirectory = './deploy/';
@@ -59,7 +59,7 @@ program
     .command('latest')
     .alias('l')
     .arguments( '<targetBranch> <sourceBranch> [outputDirectory] [packageName]', 'Compare two branches')
-    .description('Creates the package.xml file by comparing two branches')
+    .description('Creates the package.xml file by comparing the latest commit in two branches')
     .action( function(targetBranch, sourceBranch, outputDirectory, packageName){
         if(!outputDirectory){
             outputDirectory = './deploy/';

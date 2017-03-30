@@ -60,13 +60,14 @@ program
     .alias('l')
     .arguments( '<targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
     .description('Creates the package.xml file by comparing the latest commit in two branches')
-    .option('-f, --folder <outputDirectory>','Optionally specify output directory')
+    .option('-f, --folder <outputDirectory>','Optionally specify output directory', './deploy/')
     .option('-p, --package <packageName>','Optionally specify the package name')
     .action( function(targetBranch, sourceBranch, outputDirectory, packageName){
-        if(program.folder) outputDirectory = program.folder;
+        if(this.folder) outputDirectory = this.folder;
         if(!outputDirectory){
             outputDirectory = './deploy/';
         }
+        if(this.package) packageName = this.package;
         if(!packageName){
             packageName = 'diff_'+targetBranch;
         }

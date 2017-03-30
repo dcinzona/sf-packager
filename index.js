@@ -58,9 +58,12 @@ program
 program
     .command('latest')
     .alias('l')
-    .arguments( '<targetBranch> <sourceBranch> [outputDirectory] [packageName]', 'Compare two branches')
+    .arguments( '<targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
     .description('Creates the package.xml file by comparing the latest commit in two branches')
+    .option('-f, --folder <outputDirectory>','Optionally specify output directory')
+    .option('-p, --package <packageName>','Optionally specify the package name')
     .action( function(targetBranch, sourceBranch, outputDirectory, packageName){
+        if(program.folder) outputDirectory = program.folder;
         if(!outputDirectory){
             outputDirectory = './deploy/';
         }
@@ -93,7 +96,7 @@ program
     .option('-v, --verbose', 'Use verbose logging');
 
 function execute(outputDir, gitDiff, deploymentFolder, dryrun){
-    console.log('executing...');
+    
         if(!gitDiff){
             process.exit(1);
         }

@@ -101,12 +101,10 @@ program
         //program.debug = true;
         dorv('\nOptions\n', true);
         dorv(sprintf('args: %j', opts));
-        if(opts){
-            log(jwt[cmd](username, clientid, this.test, opts[0]));
-            process.exit(0);
-        }
-        log(jwt[cmd](username, clientid, this.test));
-        process.exit(0);
+        var data = opts ? jwt[cmd](username, clientid, this.test, opts[0]) : jwt[cmd](username, clientid, this.test);
+        if(data) log(data);
+        return;
+        //process.exit(0);
     });
 
 program

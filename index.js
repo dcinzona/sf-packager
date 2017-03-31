@@ -87,9 +87,9 @@ program
     .alias('g')
     .action(function(cmd, opts){
         //program.debug = true;
-        debug('\nOptions\n', true);
-        debug(sprintf('args: %j', opts));
-        log(git[cmd](opts));
+        logger.debug('\nOptions\n', true);
+        logger.debug(sprintf('args: %j', opts));
+        logger.log(git[cmd](opts));
         process.exit(0);
     });
 
@@ -99,10 +99,10 @@ program
     .option('-t, --test', 'Sets loginurl to test.salesforce.com')
     .action(function(cmd, username, clientid, opts){
         //program.debug = true;
-        dorv('\nOptions\n', true);
-        dorv(sprintf('args: %j', opts));
+        logger.dorv('\nOptions\n', true);
+        logger.dorv(sprintf('args: %j', opts));
         var data = opts ? jwt[cmd](username, clientid, this.test, opts[0]) : jwt[cmd](username, clientid, this.test);
-        if(data) log(data);
+        if(data) logger.log(data);
         return;
         //process.exit(0);
     });
@@ -128,10 +128,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
 
         if (!dryrun && !outputDir) {
             outputDir = './deploy';
-            //error('target required when not dry-run');
-            //program.help();
-            //process.exit(1);
-            debug(sprintf("using default target %s", outputDir));
+            logger.debug(sprintf("using default target %s", outputDir));
         }
 
         var target = outputDir;
@@ -141,7 +138,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         var gitDiffStdErr = gitDiff.stderr.toString('utf8');
 
         if (gitDiffStdErr) {
-            error(sprintf('An error has occurred: %s', gitDiffStdErr));
+            logger.error(sprintf('An error has occurred: %s', gitDiffStdErr));
             process.exit(1);
         }
 
@@ -155,10 +152,9 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
 
         fileList = gitDiffStdOut.split('\n');
 
-        //fileList.length > 0 && fileList[0] != '' ? info('Files detected as changed', true) : info('No changes detected', true);
         if(fileList.length == 1 && fileList[0] == '') {
-            info('\nFiles detected as changed\n', true);
-            info('No changes detected...exiting', false);
+            logger.info('\nFiles detected as changed\n', true);
+            logger.info('No changes detected...exiting', false);
             process.exit(0);
         }
         else if(program.verbose || program.debug){
@@ -173,8 +169,8 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
             });
             otherFiles.forEach(function(f,i){
                 if(i == 0)
-                    dorv('\nNon-Salesforce files detected as changed\n', true);
-                dorv(f);
+                    logger.dorv('\nNon-Salesforce files detected as changed\n', true);
+                logger.dorv(f);
             });
         }
         var displayedSFHEader = false;
@@ -195,7 +191,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                 // Check for invalid fileName, likely due to data stream exceeding buffer size resulting in incomplete string
                 // TODO: need a way to ensure that full fileNames are processed - increase buffer size??
                 if (parts[2] === undefined) {
-                    error(sprintf('\nFile name "%s" cannot be processed, exiting', fileName));
+                    logger.error(sprintf('\nFile name "%s" cannot be processed, exiting', fileName));
                     process.exit(1);
                 }
 
@@ -211,12 +207,12 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
 
                 if (operation === 'A' || operation === 'M') {
                     if(!displayedSFHEader) {
-                        dorv('\nSalesforce source files detected as changed\n', true);
+                        logger.dorv('\nSalesforce source files detected as changed\n', true);
                         displayedSFHEader = true;
                     }
                     // file was added or modified - add fileName to array for unpackaged and to be copied
                     var op = operation == 'A' ? color.cyan('Added') : operation == 'M' ? color.yellow('Modified') : operation == 'D' ? color.red('Deleted') : sprintf('[%s]',operation);
-                    dorv(sprintf('%s %s', op, fileName));
+                    logger.dorv(sprintf('%s %s', op, fileName));
                     fileListForCopy.push(fileName);
 
                     if (!metaBag.hasOwnProperty(parts[1])) {
@@ -228,11 +224,11 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                     }
                 } else if (operation === 'D') {
                     if(!displayedSFHEader) {
-                        dorv('\nSalesforce source files detected as changed\n', true);
+                        logger.dorv('\nSalesforce source files detected as changed\n', true);
                         displayedSFHEader = true;
                     }
                     // file was deleted
-                    dorv(sprintf('%s %s',color.red('Deleted'), fileName));
+                    logger.dorv(sprintf('%s %s',color.red('Deleted'), fileName));
                     deletesHaveOccurred = true;
 
                     if (!metaBagDestructive.hasOwnProperty(parts[1])) {
@@ -244,7 +240,7 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
                     }
                 } else {
                     // situation that requires review
-                    return error(sprintf('Operation on file needs review: %s', fileName));
+                    return logger.error(sprintf('Operation on file needs review: %s', fileName));
                 }
             }
         });
@@ -254,29 +250,29 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
         //build destructiveChanges file content
         var destructiveXML = packageWriter(metaBagDestructive);
         if (dryrun) {
-            info('\nResulting package.xml\n', true);
-            info(packageXML);
-            info('\nResulting destructiveChanges.xml\n', true);
-            info(destructiveXML);
+            logger.info('\nResulting package.xml\n', true);
+            logger.info(packageXML);
+            logger.info('\nResulting destructiveChanges.xml\n', true);
+            logger.info(destructiveXML);
             process.exit(0);
         }
-        info(sprintf('\nBuild log'), true);
-        info(sprintf('\nBuilding in directory %s', target));
+        logger.info(sprintf('\nBuild log'), true);
+        logger.info(sprintf('\nBuilding in directory %s', target));
 
         if(!deploymentFolder){
-            error('\nError: output folder was undefined');
+            logger.error('\nError: output folder was undefined');
             process.exit(1);
         }
-        info(sprintf('Saving deployment to folder: %s', deploymentFolder));
+        logger.info(sprintf('Saving deployment to folder: %s', deploymentFolder));
         
         buildPackageDir(target, deploymentFolder, metaBag, packageXML, false, (err, buildDir) => {
 
             if (err) {
-                return error(err);
+                return logger.error(err);
             }
 
             copyFiles(currentDir, buildDir, fileListForCopy);
-            info(sprintf('Successfully created package.xml and files in %s',buildDir));
+            logger.info(sprintf('Successfully created package.xml and files in %s',buildDir));
 
         });
 
@@ -284,17 +280,17 @@ function execute(outputDir, gitDiff, deploymentFolder, dryrun){
             buildPackageDir(target, deploymentFolder, metaBagDestructive, destructiveXML, true, (err, buildDir) => {
 
                 if (err) {
-                    return error(err);
+                    return logger.error(err);
                 }
 
-                info(sprintf('Successfully created destructiveChanges.xml in %s',buildDir));
+                logger.info(sprintf('Successfully created destructiveChanges.xml in %s',buildDir));
             });
         }
 }
 
 function showHelp(missingArgs){
     if(missingArgs)
-        error('Error: Missing required arguments');
+        logger.error('Error: Missing required arguments');
     program.help(); 
     process.exit(1);
 }
@@ -303,29 +299,4 @@ program.parse(process.argv);
 
 if (!program.args || !program.args.length) {
     showHelp();
-}
-
-
-function dorv(message, header){
-    logger.dorv(message, header);
-};
-
-function verbose(message, header){
-    logger.verbose(message, header);
-}
-
-function debug(message, header){
-    logger.debug(message, header);
-}
-
-function log(message, header){
-    logger.log(message, header);
-}
-
-function info(message, header){
-    logger.info(message, header);
-}
-
-function error(message){
-    logger.error(message);
 }

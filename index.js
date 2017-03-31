@@ -25,7 +25,8 @@ var util = require('util'),
     color = require('colors-cli/safe'),
     typeOf = require('./lib/typeof'),
     git = require('./lib/git'),
-    l = require('./lib/log');
+    logger = require('./lib/logger'),
+    jwt = require('./lib/jwt');
 
 var options = {
     sourceBranch : false,
@@ -35,6 +36,8 @@ var options = {
     output : false,
     packageName : false
 }
+// set initial log level
+logger.setLogLevel(1);
 
 program
     .command('since')
@@ -91,10 +94,33 @@ program
     });
 
 program
+    .command('jwt')
+    .arguments('<cmd> <username> <clientid> [opts...]')
+    .option('-t, --test', 'Sets loginurl to test.salesforce.com')
+    .action(function(cmd, username, clientid, opts){
+        //program.debug = true;
+        dorv('\nOptions\n', true);
+        dorv(sprintf('args: %j', opts));
+        if(opts){
+            log(jwt[cmd](username, clientid, this.test, opts[0]));
+            process.exit(0);
+        }
+        log(jwt[cmd](username, clientid, this.test));
+        process.exit(0);
+    });
+
+program
     .version(packageVersion)    
     .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
-    .option('-D, --debug', 'Show debug variables')
-    .option('-v, --verbose', 'Use verbose logging');
+    .option('-D, --debug', 'Show debug variables', function(){
+        logger.setLogLevel(2);
+    })
+    .option('-v, --verbose', 'Use verbose logging', function(){
+        logger.setLogLevel(3);
+    })
+    .option('--silent', 'skip logging', function(){
+        logger.setLogLevel(0);
+    });
 
 function execute(outputDir, gitDiff, deploymentFolder, dryrun){
     
@@ -283,25 +309,25 @@ if (!program.args || !program.args.length) {
 
 
 function dorv(message, header){
-    l.dorv(message, header);
+    logger.dorv(message, header);
 };
 
 function verbose(message, header){
-    l.verbose(message, header);
+    logger.verbose(message, header);
 }
 
 function debug(message, header){
-    l.debug(message, header);
+    logger.debug(message, header);
 }
 
 function log(message, header){
-    info(message, header);
+    logger.log(message, header);
 }
 
 function info(message, header){
-    l.info(message, header);
+    logger.info(message, header);
 }
 
 function error(message){
-    l.error(message);
+    logger.error(message);
 }

@@ -18,6 +18,8 @@
     "mkdirp": "0.5.1",
     "xmlbuilder": "4.2.1",
     "colors-cli": "latest",
-    "sprintf-js": "latest"
+    "sprintf-js": "latest",
+    "jsonwebtoken": "latest",
+    "lodash": "latest"
   }
 }

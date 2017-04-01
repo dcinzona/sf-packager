@@ -9,6 +9,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "repository" : { 
+    "type" : "git", 
+    "url" : "https://github.com/dcinzona/sf-packager.git"
+  },
   "keywords": [],
   "author": "gtandeciarz",
   "license": "ISC",
@@ -21,6 +25,11 @@
     "sprintf-js": "latest",
     "jsonwebtoken": "latest",
     "lodash": "latest",
-    "node-rest-client": "latest"
+    "node-rest-client": "latest",
+    "json-beautify": "latest",
+    "cardinal": "latest",
+    "jsforce": "latest",
+    "archiver": "latest",
+    "vorpal": "latest"
   }
 }

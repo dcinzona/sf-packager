@@ -14,6 +14,9 @@
  */
 
 var program = require('commander');
+var vorpal = require('vorpal')();
+var color = require('colors-cli/safe');
+var fs = require('fs');
 var util = require('util'),
     spawnSync = require('child_process').spawnSync,
     cp = require('child_process'),
@@ -26,7 +29,8 @@ var util = require('util'),
     typeOf = require('./lib/typeof'),
     git = require('./lib/git'),
     logger = require('./lib/logger'),
-    jwt = require('./lib/jwt');
+    jwt = require('./lib/jwt'),
+    mdapi = require('./lib/mdapi')
 
 var options = {
     sourceBranch : false,
@@ -108,6 +112,59 @@ program
     });
 
 program
+    .command('mdapi')
+    .arguments('<cmd> [opts...]')
+    .option('-f, --filePath <filePath>', 'Path to zip file containing metadata package')
+    .option('-p, --production', 'Sets loginurl to login.salesforce.com')
+    .option('-c, --checkOnly', 'Sets loginurl to test.salesforce.com')
+    .option('-j, --jwt', 'JWT Bearer token')
+    .action(function(cmd, opts){
+        //program.debug = true;
+        if(cmd == 'createZip' || cmd == 'zip'){
+            mdapi.zip(opts[0], opts[1]);
+        }
+        if(cmd == 'deploy' || cmd == 'deployZip'){
+            mdapi.deployZip(opts[0], opts[1]);
+        }
+        return;
+        //process.exit(0);
+    });
+
+program
+    .command('createZip')
+    .arguments('<unpackedDirectory> [packageName] [opts...]')
+    .action(function(unpackedDirectory, packageName, opts){
+        //program.debug = true;
+        var output = mdapi.zip(unpackedDirectory, packageName);
+        output.on('close', function(){
+            process.exit(0);
+        });
+        return;
+    });
+
+vorpal.localStorage('sfpackage.settings');
+vorpal
+    .command('deploy <zipFile>')
+    .allowUnknownOptions()
+    .action((args, callback) => {
+        logger.log(args);
+        if(fs.existsSync(args.zipFile)){
+            mdapi.deploy(args.zipFile);
+        }else{
+            logger.error(args.zipFile + ' not found.\n')
+        }
+        callback();
+    });
+vorpal
+    .command('createZip <unpackedDirectory> [packageName]')
+    .allowUnknownOptions()
+    .action((o, cb) => {
+        var output = mdapi.zip(o.unpackedDirectory, o.packageName);
+        cb();
+    });
+
+
+program
     .version(packageVersion)    
     .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
     .option('-D, --debug', 'Show debug variables', function(){
@@ -118,9 +175,14 @@ program
     })
     .option('--silent', 'skip logging', function(){
         logger.setLogLevel(0);
+    })
+    .option('-i, --interactive', 'Enter interactive console', function(){
+        vorpal
+            .delimiter(color.yellow('sfpackage') + ' > ')
+            .show();
     });
 
-function execute(outputDir, gitDiff, deploymentFolder, dryrun){
+var execute = function(outputDir, gitDiff, deploymentFolder, dryrun){
     
         if(!gitDiff){
             process.exit(1);
@@ -294,9 +356,11 @@ function showHelp(missingArgs){
     program.help(); 
     process.exit(1);
 }
-
+/* */
 program.parse(process.argv);
-
+/* */
 if (!program.args || !program.args.length) {
-    showHelp();
+    //showHelp();
+
 }
+/* */

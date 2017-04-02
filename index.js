@@ -141,7 +141,14 @@ program
         return;
     });
 
-
+program
+    .command('interactive')
+    .alias('i')
+    .description('Runs sfpackager in interactive mode')
+    .arguments('[autorun...]')
+    .action(function(autorun){
+        vc.run(autorun);
+    });
 
 program
     .version(packageVersion)
@@ -154,21 +161,21 @@ program
     })
     .option('--silent', 'skip logging', function(){
         logger.setLogLevel(0);
-    })
-    .option('-i, --interactive [autorun]', 'Enter interactive console', function(autorun){
-        vc.init(autorun);
     });
 
 function showHelp(missingArgs){
     if(missingArgs)
         logger.error('Error: Missing required arguments');
-    program.help(); 
+    program.help();
     process.exit(1);
 }
-/* */
-program.parse(process.argv);
-/* */
+
 if (!program.args || !program.args.length) {
-    //showHelp();
+    if(!program.interactive){
+        //vc.run();
+    }
+    else{
+        showHelp();
+    }
 }
-/* */
+program.parse(process.argv)

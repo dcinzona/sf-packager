@@ -6,12 +6,14 @@
  * Also used in larger orgs to avoid deploying all metadata in automated deployments
  *
  * usage:
- *  $ sfpackage master featureBranch ./deploy/
+ *  $ sfpackage master featureBranch ./deploy/  packageName
  *
- *  This will create a file at ./deploy/featureBranch/unpackaged/package.xml
+ *  This will create a file at ./deploy/packageName/unpackaged/package.xml
  *  and copy each metadata item into a matching folder.
- *  Also if any deletes occurred it will create a file at ./deploy/featureBranch/destructive/destructiveChanges.xml
+ *  Also if any deletes occurred it will create a file at ./deploy/packageName/destructive/destructiveChanges.xml
  */
+
+//Todo: Convert project to vorpal instead of commander
 
 var program = require('commander');
 var vc = require('./lib/vorpalCommands');

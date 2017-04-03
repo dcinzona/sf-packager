@@ -34,12 +34,12 @@ var util = require('util'),
     build = require('./lib/packager').build
 
 var options = {
-    sourceBranch : false,
-    targetBranch : false,
-    commit : false,
-    timeframe : false,
-    output : false,
-    packageName : false
+    sourceBranch: false,
+    targetBranch: false,
+    commit: false,
+    timeframe: false,
+    output: false,
+    packageName: false
 }
 // set initial log level
 logger.setLogLevel(1);
@@ -47,16 +47,16 @@ logger.setLogLevel(1);
 program
     .command('since')
     .alias('s')
-    .arguments( '<since> <targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
+    .arguments('<since> <targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
     .description('Creates the package.xml file by comparing a target branch changes since a specified date')
-    .action( function(since, targetBranch, sourceBranch, outputDirectory, packageName){
-        if(!outputDirectory){
+    .action(function (since, targetBranch, sourceBranch, outputDirectory, packageName) {
+        if (!outputDirectory) {
             outputDirectory = './deploy/';
         }
-        if(!packageName){
-            packageName = 'diff_'+targetBranch;
+        if (!packageName) {
+            packageName = 'diff_' + targetBranch;
         }
-        if(!sourceBranch){
+        if (!sourceBranch) {
             sourceBranch = git.branch().trim();
         }
         var spawn = git.spawnSync(since, targetBranch, sourceBranch);
@@ -66,20 +66,20 @@ program
 program
     .command('latest')
     .alias('l')
-    .arguments( '<targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
+    .arguments('<targetBranch> [sourceBranch] [outputDirectory] [packageName]', 'Compare two branches')
     .description('Creates the package.xml file by comparing the latest commit in two branches')
-    .option('-f, --folder <outputDirectory>','Optionally specify output directory', './deploy/')
-    .option('-p, --package <packageName>','Optionally specify the package name')
-    .action( function(targetBranch, sourceBranch, outputDirectory, packageName){
-        if(this.folder) outputDirectory = this.folder;
-        if(!outputDirectory){
+    .option('-f, --folder <outputDirectory>', 'Optionally specify output directory', './deploy/')
+    .option('-p, --package <packageName>', 'Optionally specify the package name')
+    .action(function (targetBranch, sourceBranch, outputDirectory, packageName) {
+        if (this.folder) outputDirectory = this.folder;
+        if (!outputDirectory) {
             outputDirectory = './deploy/';
         }
-        if(this.package) packageName = this.package;
-        if(!packageName){
-            packageName = 'diff_'+targetBranch;
+        if (this.package) packageName = this.package;
+        if (!packageName) {
+            packageName = 'diff_' + targetBranch;
         }
-        if(!sourceBranch){
+        if (!sourceBranch) {
             sourceBranch = git.branch().trim();
         }
         var spawn = git.spawnSync(false, targetBranch, sourceBranch);
@@ -90,7 +90,7 @@ program
     .command('checkgit')
     .arguments('<cmd> [opts...]')
     .alias('g')
-    .action(function(cmd, opts){
+    .action(function (cmd, opts) {
         //program.debug = true;
         logger.debug('\nOptions\n', true);
         logger.debug(sprintf('args: %j', opts));
@@ -102,12 +102,12 @@ program
     .command('jwt')
     .arguments('<cmd> <username> <clientid> [opts...]')
     .option('-t, --test', 'Sets loginurl to test.salesforce.com')
-    .action(function(cmd, username, clientid, opts){
+    .action(function (cmd, username, clientid, opts) {
         //program.debug = true;
         logger.dorv('\nOptions\n', true);
         logger.dorv(sprintf('args: %j', opts));
         var data = opts ? jwt[cmd](username, clientid, this.test, opts[0]) : jwt[cmd](username, clientid, this.test);
-        if(data) logger.log(data);
+        if (data) logger.log(data);
         return;
         //process.exit(0);
     });
@@ -119,12 +119,12 @@ program
     .option('-p, --production', 'Sets loginurl to login.salesforce.com')
     .option('-c, --checkOnly', 'Sets loginurl to test.salesforce.com')
     .option('-j, --jwt', 'JWT Bearer token')
-    .action(function(cmd, opts){
+    .action(function (cmd, opts) {
         //program.debug = true;
-        if(cmd == 'createZip' || cmd == 'zip'){
+        if (cmd == 'createZip' || cmd == 'zip') {
             mdapi.zip(opts[0], opts[1]);
         }
-        if(cmd == 'deploy' || cmd == 'deployZip'){
+        if (cmd == 'deploy' || cmd == 'deployZip') {
             mdapi.deployZip(opts[0], opts[1]);
         }
         return;
@@ -134,10 +134,10 @@ program
 program
     .command('createZip')
     .arguments('<unpackedDirectory> [packageName] [opts...]')
-    .action(function(unpackedDirectory, packageName, opts){
+    .action(function (unpackedDirectory, packageName, opts) {
         //program.debug = true;
         var output = mdapi.zip(unpackedDirectory, packageName);
-        output.on('close', function(){
+        output.on('close', function () {
             process.exit(0);
         });
         return;
@@ -148,35 +148,34 @@ program
     .alias('i')
     .description('Runs sfpackager in interactive mode')
     .arguments('[autorun...]')
-    .action(function(autorun){
+    .action(function (autorun) {
         vc.run(autorun);
     });
 
 program
     .version(packageVersion)
     .option('-d, --dryrun', 'Only print the package.xml and destructiveChanges.xml that would be generated')
-    .option('-D, --debug', 'Show debug variables', function(){
+    .option('-D, --debug', 'Show debug variables', function () {
         logger.setLogLevel(2);
     })
-    .option('-v, --verbose', 'Use verbose logging', function(){
+    .option('-v, --verbose', 'Use verbose logging', function () {
         logger.setLogLevel(3);
     })
-    .option('--silent', 'skip logging', function(){
+    .option('--silent', 'skip logging', function () {
         logger.setLogLevel(0);
     });
 
-function showHelp(missingArgs){
-    if(missingArgs)
+function showHelp(missingArgs) {
+    if (missingArgs)
         logger.error('Error: Missing required arguments');
     program.help();
     process.exit(1);
 }
 
 if (!program.args || !program.args.length) {
-    if(!program.interactive){
+    if (!program.interactive) {
         //vc.run();
-    }
-    else{
+    } else {
         showHelp();
     }
 }

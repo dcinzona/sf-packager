@@ -59,8 +59,9 @@ program
         if (!sourceBranch) {
             sourceBranch = git.branch().trim();
         }
-        var spawn = git.spawnSync(since, targetBranch, sourceBranch);
-        build(outputDirectory, spawn, packageName, program.dryrun);
+        //var spawn = git.spawnSync(since, targetBranch, sourceBranch);
+        //build(outputDirectory, spawn, packageName, program.dryrun);
+        vc.run(['since', since, targetBranch, sourceBranch, outputDirectory, packageName, program.dryrun ? '-d' : ''], true);
     })
 
 program
@@ -82,8 +83,9 @@ program
         if (!sourceBranch) {
             sourceBranch = git.branch().trim();
         }
-        var spawn = git.spawnSync(false, targetBranch, sourceBranch);
-        build(outputDirectory, spawn, packageName, program.dryrun);
+        //var spawn = git.spawnSync(false, targetBranch, sourceBranch);
+        //build(outputDirectory, spawn, packageName, program.dryrun);
+        vc.run(['latest', targetBranch, sourceBranch, outputDirectory, packageName, program.dryrun ? '-d' : ''], true);
     })
 
 program
@@ -134,13 +136,20 @@ program
 program
     .command('createZip')
     .arguments('<unpackedDirectory> [packageName] [opts...]')
+    .option('--deleteFile', 'Automatically delete the packaged zip (normally used for testing)')
     .action(function (unpackedDirectory, packageName, opts) {
         //program.debug = true;
+        /*
         var output = mdapi.zip(unpackedDirectory, packageName);
         output.on('close', function () {
             process.exit(0);
         });
         return;
+        */
+        console.log(this.deleteFile)
+        console.log(opts);
+        vc.run(['createZip', unpackedDirectory, packageName, this.deleteFile ? '--delete' : ''], true);
+        //process.exit(0);
     });
 
 program
@@ -171,7 +180,7 @@ function showHelp(missingArgs) {
     program.help();
     process.exit(1);
 }
-
+/*
 if (!program.args || !program.args.length) {
     if (!program.interactive) {
         //vc.run();
@@ -180,3 +189,4 @@ if (!program.args || !program.args.length) {
     }
 }
 program.parse(process.argv)
+*/

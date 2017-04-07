@@ -30,6 +30,9 @@
     "cardinal": "latest",
     "jsforce": "latest",
     "archiver": "latest",
-    "vorpal": "latest"
+    "vorpal": "latest",
+    "jsonfile": "latest",
+    "vorpal-autocomplete-fs": "latest",
+    "inquirer-autocomplete-prompt" :"latest"
   }
 }

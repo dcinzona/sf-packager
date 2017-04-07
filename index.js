@@ -14,7 +14,6 @@ var options = {
     packageName: false
 }
 // set initial log level
-
 vorpal.use(commands);
     //.parse(process.argv)
 

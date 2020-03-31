@@ -9,9 +9,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository" : { 
-    "type" : "git", 
-    "url" : "https://github.com/dcinzona/sf-packager.git"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dcinzona/sf-packager.git"
   },
   "keywords": [],
   "author": "gtandeciarz",
@@ -33,6 +33,6 @@
     "vorpal": "latest",
     "jsonfile": "latest",
     "vorpal-autocomplete-fs": "latest",
-    "inquirer-autocomplete-prompt" :"latest"
+    "inquirer-autocomplete-prompt": "latest"
   }
 }

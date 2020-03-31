@@ -1,5 +1,7 @@
 # Overview
 
+> Currently only supports files saved via the legacy mdapi file structure (./src/apex ... etc.).  If you are using the SFDX package structure, please reference the SFDX CLI.
+
 CLI Tool to generate Salesforce.com package.xml (and destructiveChange.xml) files based on git diff between two branches. 
 
 Note: TargetBranch is the branch to which you want to bring up to speed (i.e. sourceBranch changes go into targetBranch)

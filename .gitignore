@@ -3,3 +3,4 @@ deploy
 .idea
 sfpackage.config
 config
+package-lock.json
